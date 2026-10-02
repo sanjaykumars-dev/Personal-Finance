@@ -1,8 +1,13 @@
 # Personal Finance Dashboard
 
-A personal finance app that runs entirely in the browser. Track income and expenses, organise them with your own categories, set monthly budgets, save toward goals, and see where your money goes. There is no backend and no sign-up: data is stored locally in your browser with `localStorage`.
+A personal finance app for tracking income and expenses, organising them with your own categories, setting monthly budgets, saving toward goals, and seeing where your money goes.
 
-Built with React, TypeScript, Vite, Tailwind CSS, Zustand, React Hook Form, Zod and Recharts.
+It works in two ways:
+
+- **Local-only (default):** no backend and no sign-up. Data is stored in the browser with `localStorage`.
+- **With accounts (optional):** connect a free [Supabase](https://supabase.com) project to add sign-in and a database. Data then syncs across devices, and a guest mode still lets visitors try the app without an account.
+
+Built with React, TypeScript, Vite, Tailwind CSS, Zustand, React Hook Form, Zod, Recharts and (optionally) Supabase.
 
 ## Screenshots
 
@@ -51,6 +56,13 @@ Built with React, TypeScript, Vite, Tailwind CSS, Zustand, React Hook Form, Zod 
 - Top spending categories
 - Financial insights generated from your actual data, for example a month-to-date spending comparison, savings rate, highest variable expense, budgets at risk, progress toward your income target and the next goal deadline. An insight is shown only when the data supports it.
 
+**Accounts & sync** (optional, see [Accounts & cloud sync](#accounts--cloud-sync-optional))
+- Email/password sign-up and sign-in, password reset by email, and optional Google/GitHub sign-in
+- **Guest mode:** "Continue without an account" uses browser storage with sample data
+- On first sign-in, choose to copy this browser's data, start with sample data, or start fresh
+- Changes save automatically in the background, with a live "Saving… / All changes saved" indicator
+- Offline-tolerant: failed saves retry with backoff, and you're warned before signing out or closing the tab with unsaved changes
+
 **Settings**
 - Profile: name, currency (INR by default, with lakh grouping such as ₹1,24,580) and monthly income target
 - Appearance: light, dark or system
@@ -68,7 +80,8 @@ Built with React, TypeScript, Vite, Tailwind CSS, Zustand, React Hook Form, Zod 
 | Charts | Recharts |
 | Icons | Lucide React |
 | Routing | React Router (lazy-loaded routes) |
-| Persistence | `localStorage` |
+| Persistence | `localStorage` (guest / local-only) |
+| Accounts & database | Supabase Auth + Postgres with Row Level Security (optional) |
 
 ## Architecture
 
@@ -77,6 +90,7 @@ src/
 ├── components/
 │   ├── common/        Button, Card, Modal, ConfirmDialog, form controls, ProgressBar,
 │   │                  EmptyState, StatCard, CategoryIcon, CategorySelect, Toaster
+│   ├── auth/          AccountGate, account setup, sync indicator, account card
 │   ├── layout/        AppLayout, Sidebar, Topbar, MobileNav
 │   ├── dashboard/     SummaryCards (other dashboard widgets are shared with the pages below)
 │   ├── transactions/  TransactionFormModal, filters bar, list item
@@ -86,11 +100,15 @@ src/
 │   └── settings/      Profile, Appearance, CategoryManager, DataManagement
 ├── pages/             One file per route
 ├── store/             transactionStore, categoryStore, budgetStore, goalStore,
-│                      settingsStore, uiStore (modals/toasts) and cross-store actions
+│   │                  settingsStore, uiStore (modals/toasts) and cross-store actions
+│   └── cloud/         session (auth state), sync engine, remote loading, row mappers
+├── lib/               Supabase client (only created when configured)
 ├── hooks/             useCategories, useMoney, useTheme
 ├── utils/             finance maths, insights, filters, CSV, backup, dates, formatting
 ├── types/             Domain models
 └── data/              Sample data and default categories
+supabase/
+└── schema.sql         Tables + Row Level Security policies
 ```
 
 Key decisions:
@@ -99,6 +117,8 @@ Key decisions:
 - **Cross-store invariants live in one place.** `store/actions.ts` owns operations that touch several stores, such as deleting a category (moving its transactions and budgets first), importing a backup and resetting. The UI cannot delete an in-use category without choosing where its records go.
 - **Validated persistence.** Every store's persisted state is checked with Zod when it hydrates. A corrupted or hand-edited `localStorage` entry falls back to defaults instead of crashing the app. JSON backups are validated for both shape and relationships before they replace anything.
 - **Pure calculation layer.** Totals, budget usage, goal projections and insights are plain functions in `utils/`, separate from React. Pages derive these values with `useMemo` instead of storing them.
+- **Sync without touching the UI.** Pages and forms only talk to the Zustand stores. When signed in, a sync engine (`store/cloud/sync.ts`) watches the stores. After a short pause it compares the current state with what the server last confirmed and sends only the differences (upserts, then deletes) to Supabase. Account data is never written to the guest's `localStorage` keys, so the two data sets can't mix.
+- **Security by the database, not the client.** The Supabase anon key ships to the browser by design. Row Level Security policies in `supabase/schema.sql` ensure every query only reaches the signed-in user's own rows.
 - **Sample data relative to "today".** On first launch, six months of realistic data (32 transactions, 4 budgets, 3 goals) are generated around the current date and saved once, so a new install always looks lived-in.
 
 ## Local setup
@@ -121,14 +141,63 @@ Then open http://localhost:5173.
 | `npm run build` | Typecheck, then build the production bundle into `dist/` |
 | `npm run preview` | Serve the production build locally |
 
-No environment variables are needed.
+No environment variables are needed for local-only mode. To develop with accounts, copy `.env.example` to `.env.local` and fill it in (see below).
+
+## Accounts & cloud sync (optional)
+
+Without configuration the app is local-only. To add sign-in and a database:
+
+### 1. Create a Supabase project (free)
+
+1. Sign up at [supabase.com](https://supabase.com) and create a **New project**. Pick any name, a database password, and a region close to your users.
+2. Open **SQL Editor → New query**, paste the contents of [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. This creates the tables and the security policies.
+3. Open **Project Settings → API** (labelled **Data API** in some dashboards) and copy:
+   - the **Project URL**
+   - the **anon / publishable** key (never use the `service_role` or secret key in the frontend)
+
+### 2. Configure authentication URLs
+
+In **Authentication → URL Configuration**:
+
+- **Site URL:** your production URL, e.g. `https://your-app.vercel.app`
+- **Redirect URLs:** add
+  - `https://your-app.vercel.app/**`
+  - `http://localhost:5173/**` (for local development)
+
+These make confirmation emails, password-reset links and OAuth sign-in return to your app.
+
+By default, Supabase requires new users to confirm their email. You can turn this off under **Authentication → Providers → Email → Confirm email**. Note that Supabase's built-in email sender is heavily rate-limited (only a few emails per hour). That's fine for a demo; for real use, configure custom SMTP under **Authentication → Emails**.
+
+### 3. Add environment variables
+
+**Locally:** create `.env.local` (it's git-ignored):
+
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key
+```
+
+**On Vercel:** go to Project → **Settings → Environment Variables**, add the same two variables, then **Redeploy**. Vite bakes these values in at build time, so a redeploy is required.
+
+### 4. Optional: Google / GitHub sign-in
+
+1. Enable the provider in Supabase under **Authentication → Providers** and follow its instructions to create an OAuth app with Google or GitHub.
+2. Add `VITE_AUTH_PROVIDERS=google,github` (or just one of them) to your environment variables and redeploy.
+
+### How it behaves
+
+- **Signed out:** the app opens on the login page, which also offers **Continue without an account** (guest mode, using browser storage).
+- **First sign-in:** choose to copy this browser's data, start with sample data, or start fresh.
+- **Signed in:** edits save automatically. The sidebar (and the cloud icon on mobile) shows the sync status. If saving fails or you go offline, it retries automatically, and you're warned before signing out or closing the tab with unsaved changes.
+- **Signing out** removes the account data from the screen and restores this browser's guest data.
+
+> **Free-tier notes:** Vercel's Hobby plan is for personal, non-commercial projects. Free Supabase projects **pause after about a week of inactivity**. Resume yours from the Supabase dashboard if the app reports it can't load data.
 
 ## Data and privacy
 
-All data lives in your browser's `localStorage`, under the keys `pfd:transactions`, `pfd:categories`, `pfd:budgets`, `pfd:goals` and `pfd:settings`. Nothing is sent to a server. As a result:
-
-- Data is per browser and per device. Clearing site data erases it.
-- To move data between browsers, use **Settings → Data management → Export JSON**, then **Import JSON** on the other device.
+- **Guest / local-only:** data stays in your browser's `localStorage` (keys starting with `pfd:`). It's per browser and per device, and clearing site data erases it.
+- **Signed in:** data is stored in your Supabase database and protected by Row Level Security, so each user can only read or write their own rows.
+- To move data between browsers without an account, use **Settings → Data management → Export JSON**, then **Import JSON** on the other device.
 
 ### CSV format
 
@@ -153,7 +222,7 @@ The app is a static single-page app with no backend, so deployment is just a bui
    - **Framework Preset:** Vite
    - **Build Command:** `npm run build`
    - **Output Directory:** `dist`
-4. Click **Deploy**. No environment variables are needed.
+4. Click **Deploy**. No environment variables are needed for local-only mode. For accounts, add the Supabase variables described above, then redeploy.
 
 `vercel.json` includes an SPA rewrite so that loading a URL such as `/transactions`, `/budgets`, `/goals`, `/analytics` or `/settings` directly (or refreshing on it) serves `index.html` and lets React Router handle the route:
 

@@ -1,7 +1,9 @@
 import { Moon, Plus, Settings, Sun } from "lucide-react";
 import { NavLink, useLocation } from "react-router";
 import { cn } from "@/utils/cn";
+import { SyncIndicator } from "@/components/auth/SyncIndicator";
 import { Button, IconButton } from "@/components/common/Button";
+import { useSessionStore } from "@/store/cloud/session";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useUIStore } from "@/store/uiStore";
 import { Logo } from "./Logo";
@@ -18,6 +20,7 @@ export function Topbar() {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const openAdd = useUIStore((s) => s.openAddTransaction);
   const dark = useResolvedDark();
+  const signedIn = useSessionStore((s) => s.phase === "ready");
   const current = NAV_ITEMS.find((item) => (item.to === "/" ? pathname === "/" : pathname.startsWith(item.to)));
 
   return (
@@ -28,6 +31,11 @@ export function Topbar() {
         </div>
         <p className="hidden text-sm font-medium text-muted lg:block">{current?.label ?? ""}</p>
         <div className="ml-auto flex items-center gap-1.5">
+          {signedIn && (
+            <span className="mr-1 lg:hidden">
+              <SyncIndicator compact />
+            </span>
+          )}
           <IconButton
             icon={dark ? Sun : Moon}
             label={dark ? "Switch to light theme" : "Switch to dark theme"}

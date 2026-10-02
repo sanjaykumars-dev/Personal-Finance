@@ -1,14 +1,13 @@
-import { HardDrive, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { NavLink } from "react-router";
+import { AccountCard } from "@/components/auth/AccountCard";
 import { Button } from "@/components/common/Button";
-import { useSettingsStore } from "@/store/settingsStore";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/utils/cn";
 import { Logo } from "./Logo";
 import { NAV_ITEMS } from "./navigation";
 
 export function Sidebar() {
-  const name = useSettingsStore((s) => s.name);
   const openAdd = useUIStore((s) => s.openAddTransaction);
 
   return (
@@ -43,20 +42,7 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="rounded-xl bg-surface-muted p-3">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary" aria-hidden="true">
-            {(name.trim()[0] ?? "Y").toUpperCase()}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-fg">{name.trim() || "You"}</p>
-            <p className="flex items-center gap-1 text-xs text-subtle">
-              <HardDrive className="size-3" aria-hidden="true" />
-              Stored in this browser
-            </p>
-          </div>
-        </div>
-      </div>
+      <AccountCard />
     </aside>
   );
 }

@@ -14,6 +14,27 @@ export const STORAGE_KEYS = {
 export const initialData = createSampleData();
 
 /**
+ * localStorage holds the *guest* data set. While signed in, the stores still
+ * work in memory, but reads/writes to these keys are switched off so account
+ * data never overwrites (or leaks into) the guest's local data.
+ */
+let localPersistence = true;
+
+export function setLocalPersistence(enabled: boolean): void {
+  localPersistence = enabled;
+}
+
+const guestStorage = {
+  getItem: (key: string) => (localPersistence ? localStorage.getItem(key) : null),
+  setItem: (key: string, value: string) => {
+    if (localPersistence) localStorage.setItem(key, value);
+  },
+  removeItem: (key: string) => {
+    if (localPersistence) localStorage.removeItem(key);
+  },
+};
+
+/**
  * Persist options shared by all data stores: JSON in localStorage, and
  * persisted state is validated before it replaces the in-memory defaults.
  */
@@ -25,7 +46,7 @@ export function persistOptions<State, Persisted extends Partial<State>>(
   return {
     name,
     version: 1,
-    storage: createJSONStorage(() => localStorage),
+    storage: createJSONStorage(() => guestStorage),
     partialize,
     merge: (persisted, current) => {
       const result = schema.safeParse(persisted);

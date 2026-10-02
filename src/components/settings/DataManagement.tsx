@@ -5,6 +5,7 @@ import { Card, CardHeader } from "@/components/common/Card";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { getAppData, replaceAppData, resetApplication, restoreSampleData } from "@/store/actions";
 import { useCategoryStore } from "@/store/categoryStore";
+import { useSessionStore } from "@/store/cloud/session";
 import { useTransactionStore } from "@/store/transactionStore";
 import { useUIStore } from "@/store/uiStore";
 import type { AppData } from "@/types";
@@ -46,6 +47,7 @@ function Row({ icon: Icon, title, description, children }: { icon: typeof Downlo
 export function DataManagement() {
   const toast = useUIStore((s) => s.toast);
   const transactionCount = useTransactionStore((s) => s.transactions.length);
+  const inAccount = useSessionStore((s) => s.phase === "ready");
   const csvInput = useRef<HTMLInputElement>(null);
   const jsonInput = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -164,7 +166,7 @@ export function DataManagement() {
           title: "Reset application?",
           confirmLabel: "Delete everything",
           tone: "danger" as const,
-          message: "All transactions, budgets and goals will be permanently deleted, and categories and profile settings restored to defaults. Consider exporting a backup first.",
+          message: `All transactions, budgets and goals will be permanently deleted${inAccount ? " from your account" : ""}, and categories and profile settings restored to defaults. Consider exporting a backup first.`,
           extra: null,
         };
       case "sample":
@@ -182,7 +184,14 @@ export function DataManagement() {
 
   return (
     <Card>
-      <CardHeader title="Data Management" description="Everything is stored locally in this browser (localStorage). Export a backup to keep it safe." />
+      <CardHeader
+        title="Data Management"
+        description={
+          inAccount
+            ? "Your data is stored in your account. Changes here sync automatically."
+            : "Everything is stored locally in this browser (localStorage). Export a backup to keep it safe."
+        }
+      />
       <div className="divide-y divide-line p-5">
         <Row icon={FileSpreadsheet} title="Transactions (CSV)" description="Columns: date, type, description, amount, category, notes.">
           <Button size="sm" icon={Download} onClick={exportCSV} disabled={transactionCount === 0}>

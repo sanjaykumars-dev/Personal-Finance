@@ -1,8 +1,6 @@
 import { Suspense, useEffect } from "react";
 import { Outlet, useLocation } from "react-router";
-import { Toaster } from "@/components/common/Toaster";
 import { TransactionFormModal } from "@/components/transactions/TransactionFormModal";
-import { useThemeEffect } from "@/hooks/useTheme";
 import { MobileNav } from "./MobileNav";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
@@ -23,7 +21,6 @@ function PageFallback() {
 }
 
 export function AppLayout() {
-  useThemeEffect();
   const { pathname } = useLocation();
 
   useEffect(() => {
@@ -51,7 +48,6 @@ export function AppLayout() {
       </div>
       <MobileNav />
       <TransactionFormModal />
-      <Toaster />
     </div>
   );
 }
